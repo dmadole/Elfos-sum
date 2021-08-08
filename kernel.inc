@@ -23,3 +23,35 @@ O_PRINT:   equ     033fh               ; output to printer
 O_EXECBIN: equ     0342h               ; execute from default directory
 O_SETDEF:  equ     0345h               ; set/get default directory
 O_KINIT:   equ     0348h               ; reserved - do not use!!!
+O_INMSG:   equ     034bh               ; passthrough for console output
+O_GETDEV:  equ     034eh               ; passthrough to f_getdef
+O_GETTOD:  equ     0351h               ; passthrough to f_gettod
+O_SETTOD:  equ     0354h               ; passthrough to f_settod
+O_INPUTL:  equ     0357h               ; passthrough to f_inputl
+O_BOOT:    equ     035ah               ; passthrough to f_boot
+O_TTY:     equ     035dh               ; passthrough to f_tty
+O_SETBD:   equ     0360h               ; passthrough to f_setbd
+O_INITCALL: equ    0363h               ; passthrough to f_initcall
+O_BRKTEST: equ     0366h               ; passthrough to f_brktest
+O_DEVCTRL: equ     0369h               ; passthrough to deverr
+O_ALLOC:   equ     036ch               ; passthrough to alloc
+O_DEALLOC: equ     036fh               ; passthrough to dealloc
+I_SERVE:   equ     03f6h               ; address of interrupt chain head
+V_IVEC:    equ     03fdh               ; interrupt head
+V_DVEC:    equ     036ah               ; device head
+K_VER:     equ     0400h               ; kernel version number
+K_BUILD:   equ     0403h               ; kernel build number
+K_BMONTH:  equ     0405h               ; kernel build month
+K_BDAY:    equ     0406h               ; kernel build day
+K_BYEAR:   equ     0407h               ; kernel build month
+K_HIMEM:   equ     0442h               ; high memory pointer
+K_HEAP:    equ     044dh               ; heap pointer
+K_CLKFREQ: equ     0470h               ; system clock frequency
+K_MONTH:   equ     0475h               ; date/time
+K_DAY:     equ     0476h
+K_YEAR:    equ     0477h
+K_HOUR:    equ     0478h
+K_MINUTE:  equ     0479h
+K_SECOND:  equ     047ah
+K_SECDEN:  equ     047bh
+K_SECNUM:  equ     047dh

@@ -1,12 +1,18 @@
-; This software is copyright 2021 by David S. Madole.
-; You have permission to use, modify, copy, and distribute
-; this software so long as this copyright notice is retained.
-; This software may not be used in commercial applications
-; without express written permission from the author.
+
+;  Copyright 2021, David S. Madole <david@madole.net>
 ;
-; The author grants a license to Michael H. Riley to use this
-; code for any purpose he sees fit, including commercial use,
-; and without any need to include the above notice.
+;  This program is free software: you can redistribute it and/or modify
+;  it under the terms of the GNU General Public License as published by
+;  the Free Software Foundation, either version 3 of the License, or
+;  (at your option) any later version.
+;
+;  This program is distributed in the hope that it will be useful,
+;  but WITHOUT ANY WARRANTY; without even the implied warranty of
+;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;  GNU General Public License for more details.
+;
+;  You should have received a copy of the GNU General Public License
+;  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
            ; Include kernal API entry points
@@ -23,35 +29,59 @@
            dw      start
 
 start:     org     2000h
-           br      skipspac
+           br      main
 
 
            ; Build information
 
-           db      1+80h              ; month
-           db      15                 ; day
+           db      8+80h              ; month
+           db      8                  ; day
            dw      2021               ; year
-           dw      1                  ; build
-text:      db      'Written by David S. Madole',0
+           dw      2                  ; build
+
+           db      'See github.com/dmadole/Elfos-sum for more info',0
 
 
            ; Main code starts here, check provided argument
 
-skipspac:  lda     ra                 ; skip any spaces
-           bz      argsfail
-           smi     ' '
-           bz      skipspac
+main:      ldi     128                ; output raw crc only
+           phi     r8
 
-           dec     ra
+skipspac:  lda     ra                 ; skip any spaces
+           lbz     argsfail
+           smi     ' '
+           lbz     skipspac
+
+           dec     ra                 ; if starts with dash then option
+           lda     ra
+           smi     '-'
+           lbnz    nooption
+
+           lda     ra                 ; check x option
+           smi     'x'
+           lbnz    notxopt
+
+           ldi     64                 ; output xmodem crc only
+           phi     r8
+           lbr     skipspac
+
+notxopt:   smi     'b'-'x'            ; check b option
+           lbnz    argsfail
+
+           ldi     192                ; output raw and xmodem crc
+           phi     r8
+           lbr     skipspac
+
+nooption:  dec     ra
            glo     ra                 ; remember start of name
            plo     rf
            ghi     ra
            phi     rf
 
 skipchar:  lda     ra                 ; end at null or space
-           bz      openfile
+           lbz     openfile
            smi     ' '
-           bnz     skipchar
+           lbnz    skipchar
            str     ra
 
 
@@ -67,11 +97,13 @@ openfile:  ldi     fd.1               ; get file descriptor
 
            sep     scall              ; open file
            dw      o_open
-           bdf     openfail
+           lbdf    openfail
 
-           ldi     0                  ; initialize CRC to zeri
+           ldi     0                  ; initialize CRC to zero
            plo     r7
            phi     r7
+
+           plo     r8                 ; count of bytes processed
 
            ldi     crctablo.1         ; pointer to crc lsb table
            phi     ra
@@ -99,12 +131,16 @@ readmore:  ldi     buffer.1           ; pointer to data buffer
            ghi     rc                 ; test the msb in the loop later
            adi     1
            phi     rc
-           bz      endfile            ; if read count is 0, end of file
+           lbz     endfile            ; if read count is 0, end of file
 
            ldi     buffer.1           ; reset buffer to beginning
            phi     rf
            ldi     buffer.0
            plo     rf
+
+           ghi     r8                 ; clear any overflow bits in r8
+           ani     192
+           phi     r8
 
 
            ; The following calcualtes CRC-16/KERMIT using a pre-calculated
@@ -134,16 +170,19 @@ readloop:  glo     r7           ; j = (crc & 0xff) ^ bytes[i];
            ldn     rb
            phi     r7
 
+           inc     r8           ; count total bytes
+
            inc     rf           ; rc pre-adjusted so only have to check msb
            dec     rc
            ghi     rc
-           bnz     readloop
+           lbnz    readloop
 
            sex     r2           ; get next chunk from file
-           br      readmore
+           lbr     readmore
 
 
-           ; Reached end of input file, close and output calculated CRC
+           ; At end of file, close file, setup output buffer, and put
+           ; raw result into buffer if it's been requested.
 
 endfile:   sep     scall        ; close file when done
            dw      o_close
@@ -153,6 +192,10 @@ endfile:   sep     scall        ; close file when done
            ldi     buffer.0
            plo     rf
 
+           ghi     r8           ; if not outputting raw, skip to xmodem
+           ani     128
+           lbz     getxmod
+
            ghi     r7           ; move crc to rd since file is closed now
            phi     rd
            glo     r7
@@ -161,11 +204,66 @@ endfile:   sep     scall        ; close file when done
            sep     scall        ; convert to ASCII hex represenation
            dw      f_hexout4
 
-           ldi     13           ; add cr
+           ghi     r8           ; if not outputting xmodem skip to output
+           ani     64
+           lbz     skipxmod
+
+           ldi     '/'          ; add a delimiter between crc's
            str     rf
            inc     rf
 
-           
+
+           ; If Xmodem-padded CRC is requested, continue calculating with
+           ; constant pad bytes of 26 until the next 128-byte boundard is
+           ; reached to determine what the CRC would be if the file was
+           ; transferred via XMODEM.
+
+getxmod:   ghi     r7           ; start with crc so far
+           phi     r9
+           glo     r7
+           plo     r9
+
+           sex     ra           ; because xor is indexed into ra table
+
+           lbr     xmodmpad     ; jump ahead to end test
+
+xpadloop:  glo     r9           ; j = (crc & 0xff) ^ 26;
+           xri     26
+           plo     ra
+           plo     rb
+
+           ghi     r9           ; crc = (crc >> 8) ^ table[j];
+           xor
+           plo     r9
+           ldn     rb
+           phi     r9
+
+           inc     r8
+
+xmodmpad:  glo     r8           ; keep going until xmodem boundary
+           ani     127
+           lbnz    xpadloop
+
+           sex     r2           ; be extra careful in case this is moved
+
+
+           ; Add xmodem padded result output into buffer
+
+           ghi     r9           ; move crc to rd since file is closed now
+           phi     rd
+           glo     r9
+           plo     rd
+
+           sep     scall        ; convert to ASCII hex represenation
+           dw      f_hexout4
+
+
+           ; Done calculating and composing output, terminate and sent it.
+
+skipxmod:  ldi     13           ; add cr
+           str     rf
+           inc     rf
+
            ldi     10           ; add lf
            str     rf
            inc     rf
@@ -179,43 +277,48 @@ endfile:   sep     scall        ; close file when done
            ldi     buffer.0
            plo     rf
 
-           sep    scall         ; output the result
-           dw     o_msg
+           sep     scall        ; output the result
+           dw      o_msg
 
-           sep    sret          ; and exit back to operating system
+           sep     sret         ; and exit back to operating system
 
 
            ; Error handling follows, mostly these just output a message and
            ; exit, but readfail also closes the input file first since it
            ; would be open at that point.
 
-argsfail:  ldi     argsmesg.1   ; if supplied argument is not valid
-           phi     rf
-           ldi     argsmesg.0
-           plo     rf
-           br      failmsg
+argsfail:  sep     scall
+           dw      o_inmsg
+           db      'Usage: sum filename',13,10,0
 
-openfail:  ldi     openmesg.1   ; if unable to open input file
-           phi     rf
-           ldi     openmesg.0
-           plo     rf
-           br      failmsg
+           sep     sret
+
+openfail:  sep     scall
+           dw      o_inmsg
+           db      'Open file failed',13,10,0
+
+           sep     sret
 
 readfail:  sep     scall        ; if read on input file fails
            dw      o_close
 
-           ldi     readmesg.1
-           phi     rf
-           ldi     readmesg.0
-           plo     rf
+           sep     scall
+           dw      o_inmsg
+           db      'Read file failed',13,10,0
 
-failmsg:   sep     scall       ; output the message and return
-           dw      o_msg
            sep     sret
 
-argsmesg:  db      'Usage: sum filename',13,10,0
-openmesg:  db      'Open file failed',13,10,0
-readmesg:  db      'Read file failed',13,10,0
+
+           ; Concatenate an inline string onto RF and leave RF pointing to
+           ; the zero terminator so it's suitable for further appending.
+
+instrcat:  lda     r6
+           str     rf
+           inc     rf
+           lbnz    instrcat
+
+           dec     rf
+           sep     sret
 
 
            ; The following is a table of pre-calculated CRC factors that
