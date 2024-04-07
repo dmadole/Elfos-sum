@@ -17,8 +17,8 @@
 
            ; Include kernal API entry points
 
-           include bios.inc
-           include kernel.inc
+#include include/bios.inc
+#include include/kernel.inc
 
 
            ; Executable program header
