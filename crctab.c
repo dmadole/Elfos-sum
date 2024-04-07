@@ -5,6 +5,7 @@
 
 unsigned short Crc16Ccitt(char *bytes) {
 
+    char *c, *s;
     unsigned short i, j, k;
     unsigned short crc, poly;
     unsigned short table[256];
@@ -25,8 +26,9 @@ unsigned short Crc16Ccitt(char *bytes) {
     } 
 
     for (i = 0; i < 32; i++) {
+        printf("%-9s  db    ", i ? "" : "crctablo:");
         for (j = 0; j < 8; j++) {
-            printf("0%02xh, ", table[j + i * 8] & 0xff);
+            printf("0%02xh%s", table[j + i * 8] & 0xff, j < 7 ? ", " : "");
         }
         printf("\n");
     }
@@ -34,8 +36,9 @@ unsigned short Crc16Ccitt(char *bytes) {
     printf("\n");
 
     for (i = 0; i < 32; i++) {
+        printf("%-9s  db    ", i ? "" : "crctabhi:");
         for (j = 0; j < 8; j++) {
-            printf("0%02xh, ", table[j + i * 8] >> 8);
+            printf("0%02xh%s", table[j + i * 8] >> 8, j < 7 ? ", " : "");
         }
         printf("\n");
     }
@@ -48,7 +51,11 @@ int main(int argc, char **argv) {
     char * data = "CRC16TESTDATA";
     unsigned short result = Crc16Ccitt(data);
 
-    printf("result = 0x%04x, should be 0x3416\n", result);
+    if (result != 0x3416) {
+        fprintf(stderr, "result = 0x%04x, should be 0x3416\n", result);
+        exit(1);
+    }
 
+    exit(0);
 }
 
